@@ -372,6 +372,58 @@ def update_prediction():
         # st.write("Debug - Traceback:", traceback.format_exc())
 
 
+def update_prediction_lgbm():
+    """Update LightGBM predictions when sliders change."""
+    current_time = time.time()
+    if current_time - st.session_state.last_update_time < 0.1:  # 100ms debounce
+        return
+
+    if st.session_state.model is None:
+        return
+
+    if st.session_state.get('model_type') != 'LightGBM':
+        return
+
+    try:
+        # Get the stored input feature names and feature columns
+        lgbm_input_features = st.session_state.get('lgbm_input_features', [])
+        feat_cols = st.session_state.get('lgbm_feature_cols', [])
+
+        if not lgbm_input_features or not feat_cols:
+            return
+
+        # Copy the anchor row (last feature row used for inference)
+        X_modified = st.session_state.lgbm_anchor.copy()
+
+        # Update _lag_0 columns with slider values (current values)
+        for feature in lgbm_input_features:
+            slider_key = f"slider_{feature}"
+            lag_0_col = f"{feature}_lag_0"
+
+            if slider_key in st.session_state and lag_0_col in X_modified.columns:
+                X_modified[lag_0_col] = st.session_state[slider_key]
+
+        # Get predictions from all H models
+        lgbm_models = st.session_state.model
+        lgbm_preds = np.array([mdl.predict(X_modified)[0] for mdl in lgbm_models])
+
+        # Update predictions while keeping original dates and actual values
+        st.session_state.model_save = [
+            st.session_state.model_save[0],  # Keep original loss
+            lgbm_preds,                       # Update predictions
+            st.session_state.model_save[2],  # Keep actual values
+            st.session_state.model_save[3]   # Keep dates
+        ]
+
+        st.session_state.last_update_time = current_time
+
+        # Force streamlit to rerun
+        st.experimental_rerun()
+
+    except Exception as e:
+        st.error(f"Error updating LightGBM prediction: {str(e)}")
+
+
 def preProcessData(date_f, input_f, output_f):
     preProcessDataList = input_f[:]  # Create a copy to avoid modifying the original
     preProcessDataList.append(output_f)  # Append output_f instead of inserting
@@ -556,8 +608,8 @@ with col1:
                 num_leaves = st.slider('Number of Leaves:', 10, 100, 31)
                 st.divider()
             
-            # Add input feature sliders (only for LSTM)
-            if input_f and model_choice == "LSTM":  # Only show if input features are selected
+            # Add input feature sliders (for both LSTM and LightGBM)
+            if input_f:  # Only show if input features are selected
                 st.subheader("Input Feature Adjustments")
                 st.info("Adjust input features for prediction (optional)")
                 
@@ -584,6 +636,13 @@ with col1:
                                 # Ensure current_val is within bounds
                                 current_val = max(min_val, min(max_val, current_val))
                                 
+                                # Choose callback based on model type
+                                if st.session_state.model is not None:
+                                    model_type = st.session_state.get('model_type', 'LSTM')
+                                    callback = update_prediction_lgbm if model_type == 'LightGBM' else update_prediction
+                                else:
+                                    callback = None
+
                                 return st.slider(
                                     f"{feature}",
                                     min_value=min_val,
@@ -592,7 +651,7 @@ with col1:
                                     step=0.0001,
                                     key=f"slider_{feature}",
                                     format="%.4f",
-                                    on_change=update_prediction if st.session_state.model is not None else None
+                                    on_change=callback
                                 )
                             except Exception as e:
                                 st.warning(f"Could not create slider for {feature}: {str(e)}")
@@ -756,6 +815,8 @@ with col1:
 
                         st.session_state.model = model
                         st.session_state.model_type = "LSTM"
+                        st.session_state.scalers = st.session_state.scalers_train
+                        st.session_state.last_sequence = st.session_state.last_sequence_train
                         del model; gc.collect()
                         if device.type == "cuda":
                             torch.cuda.empty_cache()
@@ -839,6 +900,7 @@ with col1:
                             st.session_state.model_type = "LightGBM"
                             st.session_state.lgbm_feature_cols = feat_cols
                             st.session_state.lgbm_anchor = X_anchor
+                            st.session_state.lgbm_input_features = input_f  # Store for slider callback
                             
                             st.session_state.model_save = [
                                 f'{train_rmse:.4f}',
