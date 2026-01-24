@@ -578,12 +578,46 @@ with col1:
             lag_steps = st.number_input('Lag Steps:',step=1,min_value=1)
             forecast_steps = st.number_input('Forecast Steps:',step=1,min_value=1)
 
+            # Forecast start date selector (only show after preprocessing)
+            forecast_start_idx = None
+            if st.session_state.sd_click and 'data' in dir() or st.session_state.get('preprocessed_data') is not None:
+                # Store preprocessed data in session state for access here
+                if st.session_state.sd_click and 'data' in dir():
+                    st.session_state.preprocessed_data = data
+
+                if st.session_state.get('preprocessed_data') is not None:
+                    prep_data = st.session_state.preprocessed_data
+                    dates = prep_data[date_f]
+
+                    st.divider()
+                    st.subheader("Forecast Start Date:")
+                    st.info("Select where forecasting should begin. Training uses data before this date.")
+
+                    # Create a slider with date index
+                    min_idx = lag_steps + 1  # Need at least lag_steps rows for training
+                    max_idx = len(dates) - forecast_steps  # Leave room for forecast
+
+                    if min_idx < max_idx:
+                        forecast_start_idx = st.slider(
+                            "Forecast starts at:",
+                            min_value=min_idx,
+                            max_value=max_idx,
+                            value=max_idx,  # Default to end (current behavior)
+                            format="%d",
+                            key="forecast_start_slider"
+                        )
+                        selected_date = dates.iloc[forecast_start_idx]
+                        st.write(f"**Selected date:** {selected_date}")
+                        st.write(f"Training: rows 0-{forecast_start_idx-1} | Forecast: rows {forecast_start_idx}-{forecast_start_idx + forecast_steps - 1}")
+                    else:
+                        st.warning("Not enough data for selected lag/forecast steps")
+
             if (lag_steps+forecast_steps)>(df.shape[0]-forecast_steps):
                 st.error(f'Lag Steps + Forecast Steps = {lag_steps+forecast_steps} should be <= {df.shape[0]-forecast_steps} (i.e Train set:({lag_steps+forecast_steps}) + Test set:({forecast_steps}) = {lag_steps+forecast_steps+forecast_steps} (>57))', icon="ℹ️")
                 st.session_state.disable_opt = True
             else:
                 st.session_state.disable_opt = False
-            
+
             st.divider()
 
             # Model Selection
@@ -677,8 +711,13 @@ with col1:
 
             if sr:
                 with st.container(border=True):
-                    df_train = data[:-forecast_steps]
-                    df_test = data[-forecast_steps:]
+                    # Use forecast_start_idx if set, otherwise default to end
+                    if forecast_start_idx is not None:
+                        df_train = data.iloc[:forecast_start_idx]
+                        df_test = data.iloc[forecast_start_idx:forecast_start_idx + forecast_steps]
+                    else:
+                        df_train = data[:-forecast_steps]
+                        df_test = data[-forecast_steps:]
 
                     if model_choice == "LSTM":
                         # ===== LSTM TRAINING =====
