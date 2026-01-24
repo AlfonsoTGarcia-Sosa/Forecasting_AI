@@ -255,6 +255,11 @@ def build_lgbm_supervised(df: pd.DataFrame,
     """
     df = df.copy()
 
+    # Ensure no NaN in original columns before creating lags (robust imputation)
+    for col in [target_col] + list(exo_cols):
+        if col in df.columns:
+            df[col] = df[col].interpolate(method='linear').ffill().bfill()
+
     # Target lags
     for k in range(1, lag_steps + 1):
         df[f"{target_col}_lag_{k}"] = df[target_col].shift(k)
@@ -843,10 +848,18 @@ with col1:
                             N = len(supervised_df)
                             H = int(forecast_steps)
                             train_end = N - H
-                            
+
+                            # Safety check: ensure we have enough data
+                            if N == 0:
+                                st.error("No data available after preprocessing. Check for missing values in your data.")
+                                st.stop()
+                            if train_end <= H:
+                                st.error(f"Not enough data for training. Have {N} rows after lag creation, need at least {2*H+1} rows. Try reducing Lag Steps or Forecast Steps.")
+                                st.stop()
+
                             X_all = supervised_df[feat_cols]
                             y_all = supervised_df[output_f]
-                            
+
                             X_train_lgbm = X_all.iloc[:train_end]
                             X_anchor = X_all.iloc[train_end-1:train_end]
                             
