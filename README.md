@@ -2,7 +2,7 @@
 
 Multi-step forecasting with **LSTM** and **LightGBM** 
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://benford-9xpqy4twevxdn2qlbckcfl.streamlit.app/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://alfonsotgarcia-sosa-forecasting--lstm-lightgbm-demo-atgs-qbjkvo.streamlit.app/)
 
 Multi-Step Deep Learning Time Series Forecasting Demo
 
@@ -12,7 +12,7 @@ Overview
 
 This tool allows you to upload time series data and train either an LSTM or LightGBM model to generate multi-step forecasts with uncertainty quantification.
 
-Runs online at: https://benford-9xpqy4twevxdn2qlbckcfl.streamlit.app/
+Runs online at: https://alfonsotgarcia-sosa-forecasting--lstm-lightgbm-demo-atgs-qbjkvo.streamlit.app/
 
 ---
 
